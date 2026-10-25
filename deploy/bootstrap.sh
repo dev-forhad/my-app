@@ -205,6 +205,17 @@ cat > "$SCRIPT_DIR/.gha-policy.json" <<EOF
       "Condition": {
         "StringEquals": { "iam:PassedToService": "elasticbeanstalk.amazonaws.com" }
       }
+    },
+    {
+      "Sid": "ElasticBeanstalkSupportingServices",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:*", "autoscaling:*", "ec2:Describe*",
+        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
+        "elasticloadbalancing:*", "cloudwatch:*", "sns:*", "logs:*"
+      ],
+      "Resource": "*"
     }
   ]
 }
