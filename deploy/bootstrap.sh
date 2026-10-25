@@ -33,6 +33,10 @@ CNAME_PREFIX="$APP_NAME-api"
 ECR_REPO="$APP_NAME/api"
 DEPLOY_ROLE="$APP_NAME-github-deploy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The AWS CLI on Windows cannot read Git Bash paths like /c/Users/... in
+# file:// arguments — convert once to C:/Users/... (mixed) form. On real
+# Linux/Mac cygpath doesn't exist and the path is already correct.
+SCRIPT_DIR_WIN="$(cygpath -m "$SCRIPT_DIR" 2>/dev/null || echo "$SCRIPT_DIR")"
 
 step() { echo; echo "==> $*"; }
 
@@ -182,13 +186,13 @@ EOF
 if aws iam get-role --role-name "$DEPLOY_ROLE" >/dev/null 2>&1; then
   echo "    deploy role exists — updating trust + policy"
   aws iam update-assume-role-policy --role-name "$DEPLOY_ROLE" \
-    --policy-document "file://$SCRIPT_DIR/.gha-trust.json"
+    --policy-document "file://$SCRIPT_DIR_WIN/.gha-trust.json"
 else
   aws iam create-role --role-name "$DEPLOY_ROLE" \
-    --assume-role-policy-document "file://$SCRIPT_DIR/.gha-trust.json" >/dev/null
+    --assume-role-policy-document "file://$SCRIPT_DIR_WIN/.gha-trust.json" >/dev/null
 fi
 aws iam put-role-policy --role-name "$DEPLOY_ROLE" \
-  --policy-name deploy --policy-document "file://$SCRIPT_DIR/.gha-policy.json"
+  --policy-name deploy --policy-document "file://$SCRIPT_DIR_WIN/.gha-policy.json"
 rm -f "$SCRIPT_DIR/.gha-trust.json" "$SCRIPT_DIR/.gha-policy.json"
 echo "    deploy role ready: $DEPLOY_ROLE"
 
@@ -197,15 +201,15 @@ step "4/7 Elastic Beanstalk IAM roles (instance + service)"
 
 EC2_ROLE="aws-elasticbeanstalk-ec2-role"
 if ! aws iam get-role --role-name "$EC2_ROLE" >/dev/null 2>&1; then
-  cat > /tmp/.eb-ec2-trust.json <<'EOF'
+  cat > "$SCRIPT_DIR/.eb-ec2-trust.json" <<'EOF'
 {
   "Version": "2012-10-17",
   "Statement": [{ "Effect": "Allow", "Principal": { "Service": "ec2.amazonaws.com" }, "Action": "sts:AssumeRole" }]
 }
 EOF
   aws iam create-role --role-name "$EC2_ROLE" \
-    --assume-role-policy-document file:///tmp/.eb-ec2-trust.json >/dev/null
-  rm -f /tmp/.eb-ec2-trust.json
+    --assume-role-policy-document file://$SCRIPT_DIR_WIN/.eb-ec2-trust.json >/dev/null
+  rm -f "$SCRIPT_DIR/.eb-ec2-trust.json"
   echo "    instance role created"
 else
   echo "    instance role already exists"
@@ -227,15 +231,15 @@ fi
 
 SERVICE_ROLE="aws-elasticbeanstalk-service-role"
 if ! aws iam get-role --role-name "$SERVICE_ROLE" >/dev/null 2>&1; then
-  cat > /tmp/.eb-svc-trust.json <<'EOF'
+  cat > "$SCRIPT_DIR/.eb-svc-trust.json" <<'EOF'
 {
   "Version": "2012-10-17",
   "Statement": [{ "Effect": "Allow", "Principal": { "Service": "elasticbeanstalk.amazonaws.com" }, "Action": "sts:AssumeRole" }]
 }
 EOF
   aws iam create-role --role-name "$SERVICE_ROLE" \
-    --assume-role-policy-document file:///tmp/.eb-svc-trust.json >/dev/null
-  rm -f /tmp/.eb-svc-trust.json
+    --assume-role-policy-document file://$SCRIPT_DIR_WIN/.eb-svc-trust.json >/dev/null
+  rm -f "$SCRIPT_DIR/.eb-svc-trust.json"
   for policy in service-role/AWSElasticBeanstalkEnhancedHealth service-role/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy; do
     aws iam attach-role-policy --role-name "$SERVICE_ROLE" \
       --policy-arn "arn:aws:iam::aws:policy/$policy" 2>/dev/null || true
@@ -366,7 +370,7 @@ if [ "$DIST_ID" = "None" ]; then
       -e "s|__OAC_ID__|$OAC_ID|" \
       "$SCRIPT_DIR/cloudfront-template.json" > "$SCRIPT_DIR/.cf-dist.json"
   DIST_ID=$(aws cloudfront create-distribution \
-    --distribution-config "file://$SCRIPT_DIR/.cf-dist.json" \
+    --distribution-config "file://$SCRIPT_DIR_WIN/.cf-dist.json" \
     --query "Distribution.Id" --output text)
   rm -f "$SCRIPT_DIR/.cf-dist.json"
   aws ssm put-parameter --name "$SSM_PARAM" --value "$DIST_ID" --type String >/dev/null
@@ -391,7 +395,7 @@ cat > "$SCRIPT_DIR/.bucket-policy.json" <<EOF
 }
 EOF
 aws s3api put-bucket-policy --bucket "$WEB_BUCKET" \
-  --policy "file://$SCRIPT_DIR/.bucket-policy.json"
+  --policy "file://$SCRIPT_DIR_WIN/.bucket-policy.json"
 rm -f "$SCRIPT_DIR/.bucket-policy.json"
 
 CF_DOMAIN=$(aws cloudfront get-distribution --id "$DIST_ID" \
