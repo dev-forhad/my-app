@@ -252,8 +252,11 @@ fi
 # ---- 5. Elastic Beanstalk application + environment -----------------------------
 step "5/7 Elastic Beanstalk application + environment ($EB_ENV, t3.micro, single instance)"
 
-if ! aws elasticbeanstalk describe-applications --application-names "$EB_APP" \
-    --query "Applications[0].ApplicationName" --output text 2>/dev/null | grep -q .; then
+# NOTE: with `--output text`, a missing value prints the literal string "None" —
+# so never use grep-based emptiness checks; count results instead.
+APP_COUNT=$(aws elasticbeanstalk describe-applications \
+  --application-names "$EB_APP" --query "length(Applications)" --output text 2>/dev/null)
+if [ "$APP_COUNT" = "0" ]; then
   aws elasticbeanstalk create-application --application-name "$EB_APP" >/dev/null
   echo "    application created"
 else
@@ -318,8 +321,8 @@ EOF
     --source-bundle "S3Bucket=$EB_BUCKET,S3Key=initial-$APP_NAME.zip" >/dev/null 2>&1; then
     aws elasticbeanstalk describe-application-versions \
       --application-name "$EB_APP" --version-labels v-bootstrap \
-      --query "ApplicationVersions[0].VersionLabel" --output text | grep -q . \
-      || { echo "::error:: could not create v-bootstrap application version"; exit 1; }
+      --query "length(ApplicationVersions)" --output text 2>/dev/null | grep -q '^0$' \
+      && { echo "::error:: could not create v-bootstrap application version"; exit 1; }
     echo "    v-bootstrap already exists"
   fi
   rm -f "$SCRIPT_DIR/.initial-bundle.zip"
