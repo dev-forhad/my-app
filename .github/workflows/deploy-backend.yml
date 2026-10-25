@@ -87,6 +87,24 @@ jobs:
               --process
           } 2>&1 | tee deploy.log
 
+      - name: Wait for application version processing
+        run: |
+          for i in $(seq 1 30); do
+            ST=$(aws elasticbeanstalk describe-application-versions \
+              --application-name "$EB_APPLICATION" \
+              --version-labels "v-${{ steps.names.outputs.sha }}" \
+              --query "ApplicationVersions[0].Status" --output text)
+            echo "version status: $ST"
+            [ "$ST" = "PROCESSED" ] && exit 0
+            if [ "$ST" = "FAILED" ]; then
+              echo "::error::Elastic Beanstalk failed to process the application version"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::version still not PROCESSED after 5 minutes"
+          exit 1
+
       - name: Deploy to environment
         env:
           SHA: ${{ steps.names.outputs.sha }}
