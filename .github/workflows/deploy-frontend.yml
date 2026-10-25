@@ -1,0 +1,75 @@
+# Deploys the React app whenever files under client/ change on main.
+# Pipeline: build with Vite -> upload to S3 -> invalidate CloudFront cache.
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+    paths: ["client/**", ".github/workflows/deploy-frontend.yml"]
+  workflow_dispatch: # allows a manual run from the Actions tab
+
+permissions:
+  id-token: write # required for the AWS OIDC trust (no stored keys)
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  S3_BUCKET: ${{ vars.S3_BUCKET }}
+  CLOUDFRONT_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
+jobs:
+  deploy:
+    name: Build React -> S3 + CloudFront
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        run: |
+          if [ -z "$S3_BUCKET" ] || [ -z "$CLOUDFRONT_ID" ]; then
+            echo "::error::Missing GitHub repository variables (AWS_REGION, S3_BUCKET, CLOUDFRONT_DISTRIBUTION_ID, AWS_ROLE_ARN). Run deploy/bootstrap.sh first — it prints the exact values to add. See README, 'Step 4'."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      # Exchange a short-lived GitHub OIDC token for temporary AWS credentials.
+      # No AWS access key secrets are stored in this repository.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build
+        working-directory: client
+        run: |
+          npm ci
+          npm run build
+
+      # Vite content-hashes asset filenames, so everything except index.html
+      # can be cached "forever" — a new build simply produces new filenames.
+      - name: Upload hashed assets (1-year cache)
+        working-directory: client
+        run: |
+          aws s3 sync dist "s3://$S3_BUCKET" --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html (never cached)
+        working-directory: client
+        run: |
+          aws s3 cp dist/index.html "s3://$S3_BUCKET/index.html" \
+            --cache-control "no-cache"
+
+      # CloudFront caches at the edge; without invalidation visitors would
+      # keep seeing the old index.html for up to 24 hours.
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_ID" \
+            --paths "/*"

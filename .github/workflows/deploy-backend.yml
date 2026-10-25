@@ -1,0 +1,114 @@
+# Deploys the .NET API whenever files under server/ or deploy/ change on main.
+# Pipeline:
+#   1. Build the Docker image, push it to Amazon ECR tagged with the git SHA
+#      (immutable artifact — every deploy is traceable to one commit)
+#   2. Bundle docker-compose.yml (pointing at that exact image) for Beanstalk
+#   3. Create a Beanstalk application version and roll the environment to it
+#   4. Wait for Beanstalk's health check, then smoke-test the API
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+    paths: ["server/**", "deploy/**", ".github/workflows/deploy-backend.yml"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'my-app/api' }}
+  EB_APPLICATION: ${{ vars.EB_APPLICATION || 'my-app-api' }}
+  EB_ENVIRONMENT: ${{ vars.EB_ENVIRONMENT || 'my-app-api-env' }}
+
+jobs:
+  deploy:
+    name: Build image -> ECR -> Elastic Beanstalk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        run: |
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ]; then
+            echo "::error::Missing GitHub repository variable AWS_ROLE_ARN. Run deploy/bootstrap.sh first — it prints the exact values. See README, 'Step 4'."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Compute image name
+        id: names
+        run: |
+          echo "account=$(aws sts get-caller-identity --query Account --output text)" >> "$GITHUB_OUTPUT"
+          echo "sha=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          IMAGE: ${{ steps.names.outputs.account }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.names.outputs.sha }}
+        run: |
+          docker build -t "$IMAGE" server
+          docker push "$IMAGE"
+
+      - name: Build Elastic Beanstalk app-version bundle
+        env:
+          IMAGE: ${{ steps.names.outputs.account }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.names.outputs.sha }}
+        run: |
+          mkdir -p bundle/.ebextensions
+          # Inject the exact image for THIS commit into the compose file.
+          sed "s|__API_IMAGE__|$IMAGE|g" deploy/docker-compose.prod.yml > bundle/docker-compose.yml
+          cp deploy/ebextensions/*.config bundle/.ebextensions/
+          cd bundle && zip -r ../app-version.zip .
+
+      - name: Upload bundle and create application version
+        env:
+          ACCOUNT: ${{ steps.names.outputs.account }}
+          SHA: ${{ steps.names.outputs.sha }}
+          BUCKET: elasticbeanstalk-${{ env.AWS_REGION }}-${{ steps.names.outputs.account }}
+        run: |
+          aws s3 mb "s3://$BUCKET" --region "$AWS_REGION" 2>/dev/null || true
+          aws s3 cp app-version.zip "s3://$BUCKET/app-version-$SHA.zip"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION" \
+            --version-label "v-$SHA" \
+            --source-bucket "$BUCKET" \
+            --source-key "app-version-$SHA.zip" \
+            --process
+
+      - name: Deploy to environment
+        env:
+          SHA: ${{ steps.names.outputs.sha }}
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENVIRONMENT" \
+            --version-label "v-$SHA"
+          echo "Waiting for the environment to update (typically 3-8 minutes)..."
+          aws elasticbeanstalk wait environment-updated --environment-name "$EB_ENVIRONMENT" || true
+          aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENVIRONMENT" \
+            --query "Environments[0].[Status,Health]" --output text
+
+      - name: Smoke test the API
+        run: |
+          URL=$(aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENVIRONMENT" \
+            --query "Environments[0].CNAME" --output text)
+          echo "Probe target: http://$URL/"
+          for i in $(seq 1 12); do
+            if curl -sf "http://$URL/" > /dev/null; then
+              echo "API is live: http://$URL/  (cloud-proxied: https://<cloudfront-domain>/api/items)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::API did not respond in time. Check Beanstalk console -> Logs."
+          exit 1

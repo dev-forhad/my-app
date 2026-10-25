@@ -1,0 +1,47 @@
+# This file runs ON the Elastic Beanstalk instance (Docker Compose platform).
+# It starts the .NET API and a PostgreSQL container on the same small
+# t3.micro instance — so the database costs nothing extra.
+#
+# GitHub Actions replaces __API_IMAGE__ with the exact ECR image built for
+# that commit (tagged with the git SHA), making every deployment an
+# immutable artifact that can be rolled back in one click.
+#
+# ${DB_PASSWORD} is an Elastic Beanstalk environment property (set once by
+# bootstrap.sh); Beanstalk substitutes it into this file at deploy time.
+services:
+  api:
+    image: __API_IMAGE__
+    ports:
+      - "80:8080" # Beanstalk expects the web app on instance port 80
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=appdb;Username=app;Password=${DB_PASSWORD}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: appdb
+    # Tuned down to fit comfortably in a 1 GB (t3.micro) instance
+    # alongside the .NET API container.
+    command: >
+      postgres -c shared_buffers=128MB -c max_connections=25
+               -c work_mem=4MB -c maintenance_work_mem=32MB -c jit=off
+    volumes:
+      # Named volume: data survives container restarts and redeploys.
+      # (It is lost if the whole environment is rebuilt — fine for a test app;
+      # use RDS or a cloud Postgres for real data. See README "Upgrade paths".)
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: always
+
+volumes:
+  pgdata:

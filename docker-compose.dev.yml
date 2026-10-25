@@ -1,0 +1,25 @@
+# Local development database only.
+# The API and Vite dev server run directly on your machine for fast reload:
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   cd server && dotnet run          # http://localhost:8080
+#   cd client && npm install && npm run dev   # http://localhost:5173
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata-dev:
