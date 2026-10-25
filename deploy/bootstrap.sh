@@ -125,16 +125,28 @@ fi
 cat > "$SCRIPT_DIR/.gha-trust.json" <<EOF
 {
   "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "$OIDC_ARN" },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": {
-        "token.actions.githubusercontent.com:sub": "repo:$GITHUB_REPO:ref:refs/heads/main"
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "$OIDC_ARN" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:$GITHUB_REPO:*"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Principal": { "Federated": "$OIDC_ARN" },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:${GITHUB_REPO%%/*}@*/${GITHUB_REPO##*/}@*:*"
+        }
       }
     }
-  }]
+  ]
 }
 EOF
 
