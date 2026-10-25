@@ -80,8 +80,7 @@ jobs:
           aws elasticbeanstalk create-application-version \
             --application-name "$EB_APPLICATION" \
             --version-label "v-$SHA" \
-            --source-bucket "$BUCKET" \
-            --source-key "app-version-$SHA.zip" \
+            --source-bundle "S3Bucket=$BUCKET,S3Key=app-version-$SHA.zip" \
             --process
 
       - name: Deploy to environment

@@ -312,10 +312,16 @@ EOF
 
   aws s3 mb "s3://$EB_BUCKET" --region "$AWS_REGION" 2>/dev/null || true
   aws s3 cp "$SCRIPT_DIR/.initial-bundle.zip" "s3://$EB_BUCKET/initial-$APP_NAME.zip" >/dev/null
-  aws elasticbeanstalk create-application-version \
+  if ! aws elasticbeanstalk create-application-version \
     --application-name "$EB_APP" \
     --version-label v-bootstrap \
-    --source-bucket "$EB_BUCKET" --source-key "initial-$APP_NAME.zip" >/dev/null
+    --source-bundle "S3Bucket=$EB_BUCKET,S3Key=initial-$APP_NAME.zip" >/dev/null 2>&1; then
+    aws elasticbeanstalk describe-application-versions \
+      --application-name "$EB_APP" --version-labels v-bootstrap \
+      --query "ApplicationVersions[0].VersionLabel" --output text | grep -q . \
+      || { echo "::error:: could not create v-bootstrap application version"; exit 1; }
+    echo "    v-bootstrap already exists"
+  fi
   rm -f "$SCRIPT_DIR/.initial-bundle.zip"
 
   echo "    creating environment (takes ~5-10 minutes)..."
