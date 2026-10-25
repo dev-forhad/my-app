@@ -8,6 +8,7 @@
 #
 # ${DB_PASSWORD} is an Elastic Beanstalk environment property (set once by
 # bootstrap.sh); Beanstalk substitutes it into this file at deploy time.
+# v0.1.1
 services:
   api:
     image: __API_IMAGE__
