@@ -56,8 +56,15 @@ jobs:
         env:
           IMAGE: ${{ steps.names.outputs.account }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.names.outputs.sha }}
         run: |
-          docker build -t "$IMAGE" server
-          docker push "$IMAGE"
+          set -o pipefail
+          docker build --progress=plain -t "$IMAGE" server 2>&1 | tee build.log
+          docker push "$IMAGE" 2>&1 | tee -a build.log
+
+      - name: Upload build log to S3 (debug)
+        if: always()
+        run: |
+          aws s3 cp build.log "s3://$S3_BUCKET/_debug/build-$GITHUB_RUN_ID.log" \
+            --cache-control no-cache --content-type text/plain || true
 
       - name: Build Elastic Beanstalk app-version bundle
         env:
