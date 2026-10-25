@@ -99,11 +99,25 @@ fi
 step "3/7 GitHub OIDC provider + deploy role (no stored AWS keys)"
 OIDC_ARN="arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com"
 if ! aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_ARN" >/dev/null 2>&1; then
+  # GitHub rotates certificates; compute thumbprints from the live chain.
+  # A stale hard-coded thumbprint makes STS reject every token with a generic
+  # "Not authorized to perform sts:AssumeRoleWithWebIdentity".
+  echo | openssl s_client -connect token.actions.githubusercontent.com:443 \
+    -servername token.actions.githubusercontent.com -showcerts 2>/dev/null \
+    | awk '/BEGIN CERT/{n++; f=".ghcert" n ".pem"} /BEGIN CERT/,/END CERT/{print > f}'
+  THUMBS=""
+  for c in .ghcert*.pem; do
+    [ -e "$c" ] || continue
+    T=$(openssl x509 -in "$c" -noout -fingerprint -sha1 2>/dev/null | cut -d= -f2 | tr -d ':' | tr 'A-F' 'a-f')
+    [ -n "$T" ] && THUMBS="$THUMBS $T"
+    rm -f "$c"
+  done
+  THUMBS="${THUMBS# } 6938fd4d98bab03faadb97b34396831e3780aea1"
   aws iam create-open-id-connect-provider \
     --url https://token.actions.githubusercontent.com \
     --client-id-list sts.amazonaws.com \
-    --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 >/dev/null
-  echo "    OIDC provider created"
+    --thumbprint-list $THUMBS >/dev/null
+  echo "    OIDC provider created (thumbprints: $THUMBS)"
 else
   echo "    OIDC provider already exists"
 fi
