@@ -15,7 +15,7 @@ on:
 
 permissions:
   id-token: write
-  contents: write # TEMPORARY: lets the debug step push the build log to a branch
+  contents: read
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -57,8 +57,8 @@ jobs:
           IMAGE: ${{ steps.names.outputs.account }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.names.outputs.sha }}
         run: |
           set -o pipefail
-          docker build --progress=plain -t "$IMAGE" server 2>&1 | tee build.log
-          docker push "$IMAGE" 2>&1 | tee -a build.log
+          docker build -t "$IMAGE" server
+          docker push "$IMAGE"
 
       - name: Build Elastic Beanstalk app-version bundle
         env:
@@ -85,7 +85,7 @@ jobs:
               --version-label "v-$SHA" \
               --source-bundle "S3Bucket=$BUCKET,S3Key=app-version-$SHA.zip" \
               --process
-          } 2>&1 | tee deploy.log
+          }
 
       - name: Wait for application version processing
         run: |
@@ -119,7 +119,7 @@ jobs:
             aws elasticbeanstalk describe-environments \
               --environment-names "$EB_ENVIRONMENT" \
               --query "Environments[0].[Status,Health]" --output text
-          } 2>&1 | tee update.log
+          }
 
       - name: Smoke test the API
         run: |
@@ -136,17 +136,3 @@ jobs:
           done
           echo "::warning::API did not respond in time. Check Beanstalk console -> Logs."
           exit 1
-
-      - name: Push debug logs to buildlog branch
-        if: always()
-        run: |
-          set +e
-          git config user.name "buildlog"
-          git config user.email "log@users.noreply.github.com"
-          git fetch origin main --depth=1
-          git checkout -B buildlog "origin/main"
-          { echo "=== pwd & files ==="; pwd; ls -la; echo "=== deploy.log ==="; cat deploy.log 2>&1; echo "=== update.log ==="; cat update.log 2>&1; } > "debug-$GITHUB_RUN_ID.txt" 2>&1
-          git add -f "debug-$GITHUB_RUN_ID.txt"
-          git commit --allow-empty -m "debug logs for run $GITHUB_RUN_ID"
-          git push -f origin buildlog
-          exit 0
