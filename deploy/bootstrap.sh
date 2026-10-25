@@ -180,7 +180,8 @@ cat > "$SCRIPT_DIR/.gha-policy.json" <<EOF
       "Sid": "S3ArtifactsAndStaticSite",
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket",
-                 "s3:CreateBucket", "s3:GetBucketLocation"],
+                 "s3:CreateBucket", "s3:GetBucketLocation",
+                 "s3:GetObjectAcl", "s3:PutObjectAcl"],
       "Resource": [
         "arn:aws:s3:::$EB_BUCKET",
         "arn:aws:s3:::$EB_BUCKET/*",
@@ -256,6 +257,25 @@ for policy in AWSElasticBeanstalkWebTier AWSElasticBeanstalkWorkerTier AmazonEC2
   aws iam attach-role-policy --role-name "$EC2_ROLE" \
     --policy-arn "arn:aws:iam::aws:policy/$policy" 2>/dev/null || true
 done
+# EB reads deployment artifacts from its S3 bucket using legacy ACL calls;
+# the managed policies alone can miss s3:GetObjectAcl on that bucket.
+cat > "$SCRIPT_DIR/.eb-instance-s3.json" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "EBArtifactBucketRead",
+    "Effect": "Allow",
+    "Action": ["s3:ListBucket", "s3:GetObject", "s3:GetObjectAcl", "s3:GetObjectVersion"],
+    "Resource": [
+      "arn:aws:s3:::elasticbeanstalk-$AWS_REGION-*",
+      "arn:aws:s3:::elasticbeanstalk-$AWS_REGION-*/*"
+    ]
+  }]
+}
+EOF
+aws iam put-role-policy --role-name "$EC2_ROLE" --policy-name eb-artifact-bucket \
+  --policy-document "file://$SCRIPT_DIR_WIN/.eb-instance-s3.json" >/dev/null
+rm -f "$SCRIPT_DIR/.eb-instance-s3.json"
 if ! aws iam get-instance-profile --instance-profile-name "$EC2_ROLE" >/dev/null 2>&1; then
   aws iam create-instance-profile --instance-profile-name "$EC2_ROLE" >/dev/null
   aws iam add-role-to-instance-profile --instance-profile-name "$EC2_ROLE" \
