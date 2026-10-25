@@ -23,7 +23,9 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-us-east-1}"
 GITHUB_REPO="${GITHUB_REPO:?Set GITHUB_REPO like GITHUB_REPO=yourname/your-repo}"
 APP_NAME="${APP_NAME:-my-app}"
-DB_PASSWORD="${DB_PASSWORD:-$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)}"
+# Read a bounded chunk of randomness first, then filter — piping tr directly
+# off /dev/urandom leaves it writing forever and dying by SIGPIPE under pipefail.
+DB_PASSWORD="${DB_PASSWORD:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24)}"
 
 EB_APP="$APP_NAME-api"
 EB_ENV="$APP_NAME-api-env"
