@@ -19,3 +19,4 @@ bundle/
 # Misc
 .DS_Store
 *.log
+gchain-*.pem
