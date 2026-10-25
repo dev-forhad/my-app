@@ -395,7 +395,9 @@ else
 fi
 
 SSM_PARAM="/$APP_NAME/cloudfront-distribution-id"
-DIST_ID=$(aws ssm get-parameter --name "$SSM_PARAM" --query "Parameter.Value" --output text 2>/dev/null || echo None)
+# MSYS_NO_PATHCONV stops Git Bash rewriting the leading-slash SSM name into a
+# Windows path when calling the native aws.exe.
+DIST_ID=$(MSYS_NO_PATHCONV=1 aws ssm get-parameter --name "$SSM_PARAM" --query "Parameter.Value" --output text 2>/dev/null || echo None)
 if [ "$DIST_ID" = "None" ]; then
   # Managed policy IDs differ per account — resolve by name, never hard-code.
   POL_CACHE=$(aws cloudfront list-cache-policies --type managed \
@@ -417,7 +419,7 @@ if [ "$DIST_ID" = "None" ]; then
     --distribution-config "file://$SCRIPT_DIR_WIN/.cf-dist.json" \
     --query "Distribution.Id" --output text)
   rm -f "$SCRIPT_DIR/.cf-dist.json"
-  aws ssm put-parameter --name "$SSM_PARAM" --value "$DIST_ID" --type String >/dev/null
+  MSYS_NO_PATHCONV=1 aws ssm put-parameter --name "$SSM_PARAM" --value "$DIST_ID" --type String >/dev/null
   echo "    distribution created: $DIST_ID (first deploy takes ~5-10 min)"
 else
   echo "    distribution already exists: $DIST_ID"
