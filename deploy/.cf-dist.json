@@ -1,0 +1,57 @@
+{
+  "CallerReference": "my-app-1792923526",
+  "Comment": "my-app: S3 (React) + Elastic Beanstalk (.NET API)",
+  "Enabled": true,
+  "DefaultRootObject": "index.html",
+  "HttpVersion": "http2and3",
+  "IPV6Enabled": true,
+  "Origins": {
+    "Quantity": 2,
+    "Items": [
+      {
+        "Id": "s3-react",
+        "DomainName": "my-app-static-565398310049.s3.eu-west-1.amazonaws.com",
+        "OriginAccessControlId": "E1R7PHWZHMS5C9",
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        }
+      },
+      {
+        "Id": "eb-api",
+        "DomainName": "my-app-api.eu-west-1.elasticbeanstalk.com",
+        "CustomOriginConfig": {
+          "HTTPPort": 80,
+          "HTTPSPort": 443,
+          "OriginProtocolPolicy": "http-only",
+          "OriginSslProtocols": {
+            "Quantity": 1,
+            "Items": ["TLSv1.2"]
+          }
+        }
+      }
+    ]
+  },
+  "OriginGroups": {
+    "Quantity": 0
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "s3-react",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "Compress": true,
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  },
+  "CacheBehaviors": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "PathPattern": "api/*",
+        "TargetOriginId": "eb-api",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "Compress": true,
+        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b0438c50757",
+        "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e296678"
+      }
+    ]
+  },
+  "PriceClass": "PriceClass_100"
+}

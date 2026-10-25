@@ -4,7 +4,7 @@
   "Enabled": true,
   "DefaultRootObject": "index.html",
   "HttpVersion": "http2and3",
-  "IPV6Enabled": true,
+  "IsIPV6Enabled": true,
   "Origins": {
     "Quantity": 2,
     "Items": [

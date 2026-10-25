@@ -266,9 +266,13 @@ fi
 ENV_STATUS=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
   --query "Environments[0].Status" --output text 2>/dev/null)
 
-if [ "$ENV_STATUS" != "None" ] && [ -n "$ENV_STATUS" ]; then
-  echo "    environment already exists (status: $ENV_STATUS) — skipping creation"
-else
+# Only skip creation for a live/starting environment. NOTE: a failed creation
+# ends in status "Terminated" — the name must be recreated from scratch.
+case "$ENV_STATUS" in
+  Ready|Launching|Updating)
+    echo "    environment already exists (status: $ENV_STATUS) — skipping creation"
+    ;;
+  *)
   echo "    picking the latest 'Amazon Linux 2023 + Docker' platform..."
   SOLUTION_STACK=$(aws elasticbeanstalk list-available-solution-stacks \
     --query "SolutionStacks[?starts_with(@, '64bit Amazon Linux 2023') && contains(@, 'running Docker')] | [0]" \
@@ -314,6 +318,12 @@ EOF
   rm -rf "$BUNDLE"
 
   aws s3 mb "s3://$EB_BUCKET" --region "$AWS_REGION" 2>/dev/null || true
+  # EB uploads artifacts with legacy ACL calls; buckets created since 2023
+  # default to ACLs-off ownership, which makes provisioning fail with
+  # "The bucket does not allow ACLs". BucketOwnerPreferred re-enables them
+  # for owner-only grants while keeping the bucket private.
+  aws s3api put-bucket-ownership-controls --bucket "$EB_BUCKET" \
+    --ownership-controls "Rules=[{ObjectOwnership=BucketOwnerPreferred}]" 2>/dev/null || true
   aws s3 cp "$SCRIPT_DIR/.initial-bundle.zip" "s3://$EB_BUCKET/initial-$APP_NAME.zip" >/dev/null
   if ! aws elasticbeanstalk create-application-version \
     --application-name "$EB_APP" \
@@ -344,8 +354,24 @@ EOF
       "Namespace=aws:elasticbeanstalk:application:environment,OptionName=DB_PASSWORD,Value=$DB_PASSWORD" \
     --tags "Key=app,Value=$APP_NAME" >/dev/null
 
-  aws elasticbeanstalk wait environment-updated --environment-name "$EB_ENV" || true
-fi
+  # Poll status every 20s (up to 15 min) — the built-in waiter gives up at ~7
+  # minutes, which is shorter than a cold t3.micro launch can take.
+  for i in $(seq 1 45); do
+    ST=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
+      --query "Environments[0].Status" --output text 2>/dev/null)
+    [ "$ST" = "Ready" ] && break
+    [ "$ST" = "Terminated" ] && break
+    sleep 20
+  done
+  ST=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
+    --query "Environments[0].Status" --output text 2>/dev/null)
+  if [ "$ST" != "Ready" ]; then
+    echo "::error:: environment ended in status '$ST' — check events:"
+    aws elasticbeanstalk describe-events --environment-name "$EB_ENV" --max-records 5 \
+      --query "Events[0:5].[EventDate, Severity, Message]" --output text
+    exit 1
+  fi
+esac
 
 EB_CNAME=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
   --query "Environments[0].CNAME" --output text)
