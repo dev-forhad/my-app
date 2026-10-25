@@ -331,7 +331,6 @@ EOF
     --cname-prefix "$CNAME_PREFIX" \
     --solution-stack-name "$SOLUTION_STACK" \
     --version-label v-bootstrap \
-    --service-role "$SERVICE_ROLE" \
     --option-settings \
       "Namespace=aws:autoscaling:launchconfiguration,OptionName=InstanceType,Value=t3.micro" \
       "Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=$EC2_ROLE" \
