@@ -397,11 +397,21 @@ fi
 SSM_PARAM="/$APP_NAME/cloudfront-distribution-id"
 DIST_ID=$(aws ssm get-parameter --name "$SSM_PARAM" --query "Parameter.Value" --output text 2>/dev/null || echo None)
 if [ "$DIST_ID" = "None" ]; then
+  # Managed policy IDs differ per account — resolve by name, never hard-code.
+  POL_CACHE=$(aws cloudfront list-cache-policies --type managed \
+    --query "CachePolicyList.Items[?CachePolicy.CachePolicyConfig.Name=='Managed-CachingOptimized'].CachePolicy.Id" --output text)
+  POL_NOCACHE=$(aws cloudfront list-cache-policies --type managed \
+    --query "CachePolicyList.Items[?CachePolicy.CachePolicyConfig.Name=='Managed-CachingDisabled'].CachePolicy.Id" --output text)
+  POL_ORQ=$(aws cloudfront list-origin-request-policies --type managed \
+    --query "OriginRequestPolicyList.Items[?OriginRequestPolicy.OriginRequestPolicyConfig.Name=='Managed-AllViewerExceptHostHeader'].OriginRequestPolicy.Id" --output text)
   sed -e "s|__CALLER_REF__|$APP_NAME-$(date +%s)|" \
       -e "s|__WEB_BUCKET__|$WEB_BUCKET|" \
       -e "s|__REGION__|$AWS_REGION|" \
       -e "s|__EB_CNAME__|$EB_CNAME|" \
       -e "s|__OAC_ID__|$OAC_ID|" \
+      -e "s|__POL_CACHE__|$POL_CACHE|" \
+      -e "s|__POL_NOCACHE__|$POL_NOCACHE|" \
+      -e "s|__POL_ORQ__|$POL_ORQ|" \
       "$SCRIPT_DIR/cloudfront-template.json" > "$SCRIPT_DIR/.cf-dist.json"
   DIST_ID=$(aws cloudfront create-distribution \
     --distribution-config "file://$SCRIPT_DIR_WIN/.cf-dist.json" \

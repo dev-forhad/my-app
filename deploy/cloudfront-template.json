@@ -38,7 +38,7 @@
     "TargetOriginId": "s3-react",
     "ViewerProtocolPolicy": "redirect-to-https",
     "Compress": true,
-    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    "CachePolicyId": "__POL_CACHE__"
   },
   "CacheBehaviors": {
     "Quantity": 1,
@@ -48,8 +48,8 @@
         "TargetOriginId": "eb-api",
         "ViewerProtocolPolicy": "redirect-to-https",
         "Compress": true,
-        "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b0438c50757",
-        "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e296678"
+        "CachePolicyId": "__POL_NOCACHE__",
+        "OriginRequestPolicyId": "__POL_ORQ__"
       }
     ]
   },
