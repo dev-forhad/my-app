@@ -60,20 +60,6 @@ jobs:
           docker build --progress=plain -t "$IMAGE" server 2>&1 | tee build.log
           docker push "$IMAGE" 2>&1 | tee -a build.log
 
-      - name: Push build log to debug branch
-        if: always()
-        run: |
-          set +e
-          git config user.name "buildlog"
-          git config user.email "log@users.noreply.github.com"
-          git fetch origin main --depth=1
-          git checkout -B buildlog "origin/main"
-          { echo "=== pwd & files ==="; pwd; ls -la; echo "=== build.log ==="; cat build.log 2>&1; echo "=== deploy.log ==="; cat deploy.log 2>&1; } > "debug-$GITHUB_RUN_ID.txt" 2>&1
-          git add -f "debug-$GITHUB_RUN_ID.txt"
-          git commit --allow-empty -m "debug logs for run $GITHUB_RUN_ID"
-          git push -f origin buildlog
-          exit 0
-
       - name: Build Elastic Beanstalk app-version bundle
         env:
           IMAGE: ${{ steps.names.outputs.account }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.names.outputs.sha }}
@@ -129,3 +115,17 @@ jobs:
           done
           echo "::warning::API did not respond in time. Check Beanstalk console -> Logs."
           exit 1
+
+      - name: Push debug logs to buildlog branch
+        if: always()
+        run: |
+          set +e
+          git config user.name "buildlog"
+          git config user.email "log@users.noreply.github.com"
+          git fetch origin main --depth=1
+          git checkout -B buildlog "origin/main"
+          { echo "=== pwd & files ==="; pwd; ls -la; echo "=== build.log ==="; cat build.log 2>&1; echo "=== deploy.log ==="; cat deploy.log 2>&1; } > "debug-$GITHUB_RUN_ID.txt" 2>&1
+          git add -f "debug-$GITHUB_RUN_ID.txt"
+          git commit --allow-empty -m "debug logs for run $GITHUB_RUN_ID"
+          git push -f origin buildlog
+          exit 0
