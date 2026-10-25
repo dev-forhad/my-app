@@ -63,16 +63,16 @@ jobs:
       - name: Push build log to debug branch
         if: always()
         run: |
+          set +e
           git config user.name "buildlog"
           git config user.email "log@users.noreply.github.com"
           git fetch origin main --depth=1
           git checkout -B buildlog "origin/main"
-          [ -f build.log ] || echo "build.log was not created" > "build-$GITHUB_RUN_ID.log"
-          [ -f build.log ] && cp build.log "build-$GITHUB_RUN_ID.log"
-          [ -f deploy.log ] && cp deploy.log "deploy-$GITHUB_RUN_ID.log"
-          git add -f build-*.log deploy-*.log 2>/dev/null || git add -A
-          git commit -m "build log for run $GITHUB_RUN_ID" || true
+          { echo "=== pwd & files ==="; pwd; ls -la; echo "=== build.log ==="; cat build.log 2>&1; echo "=== deploy.log ==="; cat deploy.log 2>&1; } > "debug-$GITHUB_RUN_ID.txt" 2>&1
+          git add -f "debug-$GITHUB_RUN_ID.txt"
+          git commit --allow-empty -m "debug logs for run $GITHUB_RUN_ID"
           git push -f origin buildlog
+          exit 0
 
       - name: Build Elastic Beanstalk app-version bundle
         env:
