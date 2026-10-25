@@ -177,14 +177,19 @@ cat > "$SCRIPT_DIR/.gha-policy.json" <<EOF
       "Resource": "*"
     },
     {
-      "Sid": "S3ArtifactsAndStaticSite",
+      "Sid": "S3EBArtifacts",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket",
-                 "s3:CreateBucket", "s3:GetBucketLocation",
-                 "s3:GetObjectAcl", "s3:PutObjectAcl"],
+      "Action": ["s3:*"],
       "Resource": [
         "arn:aws:s3:::$EB_BUCKET",
-        "arn:aws:s3:::$EB_BUCKET/*",
+        "arn:aws:s3:::$EB_BUCKET/*"
+      ]
+    },
+    {
+      "Sid": "S3StaticSite",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+      "Resource": [
         "arn:aws:s3:::$WEB_BUCKET",
         "arn:aws:s3:::$WEB_BUCKET/*"
       ]
