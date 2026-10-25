@@ -49,7 +49,15 @@
         "ViewerProtocolPolicy": "redirect-to-https",
         "Compress": true,
         "CachePolicyId": "__POL_NOCACHE__",
-        "OriginRequestPolicyId": "__POL_ORQ__"
+        "OriginRequestPolicyId": "__POL_ORQ__",
+        "AllowedMethods": {
+          "Quantity": 7,
+          "Items": ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "DELETE", "POST"],
+          "CachedMethods": {
+            "Quantity": 2,
+            "Items": ["GET", "HEAD"]
+          }
+        }
       }
     ]
   },
