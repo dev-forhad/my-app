@@ -1,0 +1,6 @@
+# bootstrap temp files
+/.gha-*.json
+.cf-dist.json
+.bucket-policy.json
+.initial-bundle*
+.eb-*-trust.json
