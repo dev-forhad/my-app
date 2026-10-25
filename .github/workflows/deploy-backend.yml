@@ -69,7 +69,8 @@ jobs:
           git checkout -B buildlog "origin/main"
           [ -f build.log ] || echo "build.log was not created" > "build-$GITHUB_RUN_ID.log"
           [ -f build.log ] && cp build.log "build-$GITHUB_RUN_ID.log"
-          git add -f build-*.log 2>/dev/null || git add -A
+          [ -f deploy.log ] && cp deploy.log "deploy-$GITHUB_RUN_ID.log"
+          git add -f build-*.log deploy-*.log 2>/dev/null || git add -A
           git commit -m "build log for run $GITHUB_RUN_ID" || true
           git push -f origin buildlog
 
@@ -89,13 +90,16 @@ jobs:
           SHA: ${{ steps.names.outputs.sha }}
           BUCKET: elasticbeanstalk-${{ env.AWS_REGION }}-${{ steps.names.outputs.account }}
         run: |
-          aws s3 mb "s3://$BUCKET" --region "$AWS_REGION" 2>/dev/null || true
-          aws s3 cp app-version.zip "s3://$BUCKET/app-version-$SHA.zip"
-          aws elasticbeanstalk create-application-version \
-            --application-name "$EB_APPLICATION" \
-            --version-label "v-$SHA" \
-            --source-bundle "S3Bucket=$BUCKET,S3Key=app-version-$SHA.zip" \
-            --process
+          set -o pipefail
+          {
+            aws s3 mb "s3://$BUCKET" --region "$AWS_REGION" 2>/dev/null || true
+            aws s3 cp app-version.zip "s3://$BUCKET/app-version-$SHA.zip"
+            aws elasticbeanstalk create-application-version \
+              --application-name "$EB_APPLICATION" \
+              --version-label "v-$SHA" \
+              --source-bundle "S3Bucket=$BUCKET,S3Key=app-version-$SHA.zip" \
+              --process
+          } 2>&1 | tee deploy.log
 
       - name: Deploy to environment
         env:
