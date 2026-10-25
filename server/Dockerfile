@@ -8,12 +8,13 @@ FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-alpine AS build
 WORKDIR /src
 
 # Restore dependencies as their own layer so Docker's layer cache skips the
-# NuGet download on every code change.
+# NuGet download on every code change. Name Api.csproj explicitly — the
+# solution also references Api.Tests, which .dockerignore keeps out.
 COPY Api.csproj .
-RUN dotnet restore
+RUN dotnet restore Api.csproj
 
 COPY . .
-RUN dotnet publish -c Release -o /app --no-restore
+RUN dotnet publish Api.csproj -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}-alpine AS final
 WORKDIR /app
