@@ -1,49 +1,13 @@
 import { useState } from 'react'
+import {
+  profile, experience, projects, skillGroups, education, languages,
+} from './data.js'
 
-// All requests are relative: locally the Vite dev server proxies /api to the
-// .NET API; in production CloudFront routes /api/* to Elastic Beanstalk.
 const CONTACT_API = '/api/contact'
-
-// ── EDIT ME: your real content lives in this one file ────────────────────────
-const PROFILE = {
-  name: 'Forhad Hussain Khan',
-  title: 'Full-Stack Developer',
-  github: 'https://github.com/dev-forhad',
-  linkedin: '', // add your LinkedIn URL here when ready
-  email: 'you@example.com', // EDIT ME — shown in the footer/contact section
-  about:
-    'I build web applications end to end — React on the front, .NET APIs behind, ' +
-    'backed by PostgreSQL and shipped to AWS through automated CI/CD pipelines. ' +
-    'This very site is an example: it is a React app and a .NET API deployed from ' +
-    'git push to production with GitHub Actions, CloudFront and Elastic Beanstalk.',
-  skills: [
-    'C# / .NET', 'React', 'JavaScript', 'PostgreSQL', 'Docker',
-    'AWS', 'GitHub Actions', 'Git', 'REST APIs', 'EF Core',
-  ],
-  projects: [
-    {
-      name: 'This website',
-      description:
-        'React + .NET 8 + PostgreSQL deployed to AWS (S3, CloudFront, Elastic ' +
-        'Beanstalk) entirely through a GitHub Actions CI/CD pipeline.',
-      link: 'https://github.com/dev-forhad/my-app',
-    },
-    {
-      name: 'Project two — EDIT ME',
-      description: 'Short description of another project: what it does and what you learned building it.',
-      link: 'https://github.com/dev-forhad',
-    },
-    {
-      name: 'Project three — EDIT ME',
-      description: 'Another project. Two or three sentences is plenty.',
-      link: 'https://github.com/dev-forhad',
-    },
-  ],
-}
 
 function ContactForm() {
   const [form, setForm] = useState({ name: '', email: '', message: '' })
-  const [status, setStatus] = useState(null) // null | 'sending' | 'sent' | error text
+  const [status, setStatus] = useState(null)
 
   async function submit(e) {
     e.preventDefault()
@@ -69,28 +33,30 @@ function ContactForm() {
   if (status === 'sent') {
     return (
       <p className="sent">
-        Thanks — your message landed in my database. I will get back to you soon.
+        Thanks — your message reached my database. I will get back to you soon.
       </p>
     )
   }
 
   return (
     <form onSubmit={submit} className="contact-form">
-      <input
-        placeholder="Your name"
-        value={form.name}
-        maxLength={100}
-        required
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
-      />
-      <input
-        type="email"
-        placeholder="Your email"
-        value={form.email}
-        maxLength={200}
-        required
-        onChange={(e) => setForm({ ...form, email: e.target.value })}
-      />
+      <div className="form-row">
+        <input
+          placeholder="Your name"
+          value={form.name}
+          maxLength={100}
+          required
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+        <input
+          type="email"
+          placeholder="Your email"
+          value={form.email}
+          maxLength={200}
+          required
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+      </div>
       <textarea
         placeholder="Your message"
         rows={4}
@@ -107,49 +73,124 @@ function ContactForm() {
   )
 }
 
+function Hero() {
+  return (
+    <header className="hero">
+      <p className="hello">こんにちは · Hello, I'm</p>
+      <h1>{profile.name}</h1>
+      <p className="title">{profile.title}</p>
+      <p className="meta">{profile.location}</p>
+      <p className="links">
+        <a href={`mailto:${profile.email}`}>{profile.email}</a>
+        <a href={`tel:${profile.phone.replace(/[^+\d]/g, '')}`}>{profile.phone}</a>
+        <a href={profile.linkedin} target="_blank" rel="noreferrer">LinkedIn</a>
+        <a href={profile.github} target="_blank" rel="noreferrer">GitHub</a>
+      </p>
+    </header>
+  )
+}
+
+function Experience() {
+  return (
+    <section id="experience">
+      <h2>Experience</h2>
+      <div className="timeline">
+        {experience.map((job) => (
+          <div className="job" key={job.company}>
+            <div className="job-head">
+              <h3>{job.role} · <span className="company">{job.company}</span></h3>
+              <span className="period">{job.period} | {job.location}</span>
+            </div>
+            <ul>
+              {job.points.map((pt) => <li key={pt}>{pt}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function Projects() {
+  return (
+    <section id="projects">
+      <h2>Projects</h2>
+      {projects.map((p) => (
+        <div className="project" key={p.name}>
+          <div className="job-head">
+            <h3>{p.name} <span className="company">· {p.org}</span></h3>
+            <span className="period">{p.period}</span>
+          </div>
+          <p>{p.description}</p>
+          <div className="skills">
+            {p.tech.map((t) => <span key={t} className="chip">{t}</span>)}
+          </div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function Skills() {
+  return (
+    <section id="skills">
+      <h2>Skills</h2>
+      {skillGroups.map((g) => (
+        <div className="skill-group" key={g.title}>
+          <h3>{g.title}</h3>
+          <div className="skills">
+            {g.items.map((s) => <span key={s} className="chip">{s}</span>)}
+          </div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function EducationLanguages() {
+  return (
+    <section id="education">
+      <h2>Education & Languages</h2>
+      <div className="edu">
+        <h3>{education.degree} · <span className="company">{education.school}</span></h3>
+        <span className="period">{education.period} | {education.location} | {education.detail}</span>
+      </div>
+      <div className="skills">
+        {languages.map((l) => (
+          <span key={l.name} className="chip"><strong>{l.name}</strong> — {l.note}</span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function App() {
   return (
     <main>
-      <header className="hero">
-        <h1>{PROFILE.name}</h1>
-        <p className="title">{PROFILE.title}</p>
-        <p className="links">
-          <a href={PROFILE.github} target="_blank" rel="noreferrer">GitHub</a>
-          {PROFILE.linkedin && <a href={PROFILE.linkedin} target="_blank" rel="noreferrer">LinkedIn</a>}
-        </p>
-      </header>
+      <Hero />
 
-      <section>
+      <section id="about">
         <h2>About</h2>
-        <p>{PROFILE.about}</p>
+        <p>{profile.about}</p>
       </section>
 
-      <section>
-        <h2>Skills</h2>
-        <div className="skills">
-          {PROFILE.skills.map((s) => <span key={s} className="chip">{s}</span>)}
-        </div>
-      </section>
+      <Experience />
+      <Projects />
+      <Skills />
+      <EducationLanguages />
 
-      <section>
-        <h2>Projects</h2>
-        {PROFILE.projects.map((p) => (
-          <a key={p.name} className="project" href={p.link} target="_blank" rel="noreferrer">
-            <h3>{p.name}</h3>
-            <p>{p.description}</p>
-          </a>
-        ))}
-      </section>
-
-      <section>
+      <section id="contact">
         <h2>Contact</h2>
+        <p className="contact-lead">
+          The fastest way to reach me is email or LinkedIn — or leave a message here.
+          Every submission is stored in my own PostgreSQL database on AWS.
+        </p>
         <ContactForm />
       </section>
 
       <footer>
-        <span>© {new Date().getFullYear()} {PROFILE.name}</span>
-        {PROFILE.email !== 'you@example.com' && <span> · {PROFILE.email}</span>}
-        <span> · React · .NET · PostgreSQL · AWS</span>
+        <span>© {new Date().getFullYear()} {profile.name} · Kawasaki, Japan</span>
+        <span> · React · .NET · PostgreSQL · AWS · deployed by GitHub Actions</span>
       </footer>
     </main>
   )
