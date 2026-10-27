@@ -58,6 +58,13 @@
             "Items": ["GET", "HEAD"]
           }
         }
+      },
+      {
+        "PathPattern": "swagger*",
+        "TargetOriginId": "eb-api",
+        "ViewerProtocolPolicy": "redirect-to-https",
+        "Compress": true,
+        "CachePolicyId": "__POL_NOCACHE__"
       }
     ]
   },
