@@ -182,6 +182,28 @@ h2 {
 
 .form-error { color: #f87171; margin: 0; font-size: 0.9rem; }
 
+/* ── admin ────────────────────────────────────────────── */
+.admin-link { color: #475569; }
+
+.admin-bar {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.admin-bar button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font: inherit;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.admin-bar button.secondary { background: #334155; }
+.admin-bar button:hover { filter: brightness(1.15); }
+
 /* ── footer ───────────────────────────────────────────── */
 footer {
   margin-top: 3rem;

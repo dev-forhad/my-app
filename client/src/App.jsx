@@ -1,9 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   profile, experience, projects, skillGroups, education, languages,
 } from './data.js'
+import Admin from './Admin.jsx'
 
 const CONTACT_API = '/api/contact'
+
+// Minimal hash router: '#/admin' shows the admin console. Using the hash
+// (not a path like /admin) means the browser never sends it to the server,
+// so static hosting on S3 works without any rewrite rules.
+function useHashRoute() {
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return hash
+}
 
 function ContactForm() {
   const [form, setForm] = useState({ name: '', email: '', message: '' })
@@ -165,6 +179,9 @@ function EducationLanguages() {
 }
 
 export default function App() {
+  const hash = useHashRoute()
+  if (hash.startsWith('#/admin')) return <Admin />
+
   return (
     <main>
       <Hero />
@@ -191,6 +208,7 @@ export default function App() {
       <footer>
         <span>© {new Date().getFullYear()} {profile.name} · Kawasaki, Japan</span>
         <span> · React · .NET · PostgreSQL · AWS · deployed by GitHub Actions</span>
+        <span> · <a className="admin-link" href="#/admin">Admin</a></span>
       </footer>
     </main>
   )

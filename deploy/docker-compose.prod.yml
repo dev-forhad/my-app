@@ -8,7 +8,7 @@
 #
 # ${DB_PASSWORD} is an Elastic Beanstalk environment property (set once by
 # bootstrap.sh); Beanstalk substitutes it into this file at deploy time.
-# v0.3.0
+# v0.4.0
 services:
   api:
     image: __API_IMAGE__
@@ -16,6 +16,9 @@ services:
       - "80:8080" # Beanstalk expects the web app on instance port 80
     environment:
       ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=appdb;Username=app;Password=${DB_PASSWORD}"
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      Jwt__Key: ${JWT_KEY}
     depends_on:
       postgres:
         condition: service_healthy

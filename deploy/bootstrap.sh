@@ -26,6 +26,9 @@ APP_NAME="${APP_NAME:-my-app}"
 # Read a bounded chunk of randomness first, then filter — piping tr directly
 # off /dev/urandom leaves it writing forever and dying by SIGPIPE under pipefail.
 DB_PASSWORD="${DB_PASSWORD:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24)}"
+ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 20)}"
+JWT_KEY="${JWT_KEY:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 64)}"
 
 EB_APP="$APP_NAME-api"
 EB_ENV="$APP_NAME-api-env"
@@ -441,6 +444,36 @@ EB_CNAME=$(aws elasticbeanstalk describe-environments --environment-names "$EB_E
 EB_HEALTH=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
   --query "Environments[0].Health" --output text)
 echo "    API URL: http://$EB_CNAME  (health: $EB_HEALTH)"
+
+# Admin credentials + JWT signing key are environment properties, so the
+# containers receive them without them living in the repo. Reuse existing
+# values on re-runs (regenerating would rotate the admin password).
+CURRENT_ADMIN_PW=$(aws elasticbeanstalk describe-configuration-settings \
+  --application-name "$EB_APP" --environment-name "$EB_ENV" \
+  --query "OptionSettings[?Namespace=='aws:elasticbeanstalk:application:environment' && OptionName=='ADMIN_PASSWORD'].Value | [0]" \
+  --output text 2>/dev/null)
+if [ "$CURRENT_ADMIN_PW" != "None" ] && [ -n "$CURRENT_ADMIN_PW" ]; then
+  ADMIN_PASSWORD="$CURRENT_ADMIN_PW"
+  CURRENT_JWT_KEY=$(aws elasticbeanstalk describe-configuration-settings \
+    --application-name "$EB_APP" --environment-name "$EB_ENV" \
+    --query "OptionSettings[?Namespace=='aws:elasticbeanstalk:application:environment' && OptionName=='JWT_KEY'].Value | [0]" \
+    --output text 2>/dev/null)
+  [ "$CURRENT_JWT_KEY" != "None" ] && JWT_KEY="$CURRENT_JWT_KEY"
+  echo "    admin credentials already configured (reused)"
+else
+  echo "    applying admin credentials to the environment (few minutes)..."
+  aws elasticbeanstalk update-environment --environment-name "$EB_ENV" \
+    --option-settings \
+      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ADMIN_USERNAME,Value=$ADMIN_USERNAME" \
+      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ADMIN_PASSWORD,Value=$ADMIN_PASSWORD" \
+      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=JWT_KEY,Value=$JWT_KEY" >/dev/null
+  for i in $(seq 1 30); do
+    ST=$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENV" \
+      --query "Environments[0].Status" --output text 2>/dev/null)
+    [ "$ST" = "Ready" ] && break
+    sleep 20
+  done
+fi
 
 # ---- 6. CloudFront (S3 + API on one HTTPS domain) --------------------------------
 step "6/7 CloudFront distribution (React on /*, API on /api/*)"
