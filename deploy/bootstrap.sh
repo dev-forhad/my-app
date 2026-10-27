@@ -23,12 +23,13 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-us-east-1}"
 GITHUB_REPO="${GITHUB_REPO:?Set GITHUB_REPO like GITHUB_REPO=yourname/your-repo}"
 APP_NAME="${APP_NAME:-my-app}"
-# Read a bounded chunk of randomness first, then filter — piping tr directly
-# off /dev/urandom leaves it writing forever and dying by SIGPIPE under pipefail.
-DB_PASSWORD="${DB_PASSWORD:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24)}"
+# Random generators: read a LARGE bounded chunk first (alnum filtering keeps
+# only ~24% of bytes), then cut to length. Note HMAC-SHA256 JWT keys must be
+# >= 32 bytes, so a short yield here breaks token signing at runtime.
+DB_PASSWORD="${DB_PASSWORD:-$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24)}"
 ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 20)}"
-JWT_KEY="${JWT_KEY:-$(head -c 96 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 64)}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 20)}"
+JWT_KEY="${JWT_KEY:-$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 64)}"
 
 EB_APP="$APP_NAME-api"
 EB_ENV="$APP_NAME-api-env"
