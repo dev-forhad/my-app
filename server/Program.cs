@@ -1,10 +1,13 @@
 using Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,12 +39,63 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// Rate limiting: fixed windows partitioned by client IP.
+//   login        — 5 attempts/minute  (brute-force shield)
+//   public-write — 20 posts/minute    (spam shield on the contact form)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+    options.AddPolicy("public-write", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1) }));
+});
+
+// Swagger/OpenAPI — interactive docs at /swagger. The security definition
+// adds an "Authorize" button to the UI: paste a JWT from /api/auth/login and
+// you can call the protected inbox endpoints right from the browser.
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Portfolio API",
+        Version = "v1",
+        Description = "Public contact form + JWT-protected admin inbox. " +
+                      "POST /api/auth/login to get a token, then Authorize.",
+    });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Paste the JWT returned by POST /api/auth/login",
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 builder.Services.AddDbContext<AppDb>(options => options.UseNpgsql(connectionString));
 
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // EnsureCreated creates the schema when the database is empty but never
 // evolves an existing one — so table changes ship as explicit idempotent SQL
@@ -69,8 +123,13 @@ app.MapGet("/", () => Results.Json(new
     timeUtc = DateTime.UtcNow
 }));
 
+// Swagger UI — interactive documentation.
+app.UseSwagger();
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Portfolio API v1"));
+
 // Login: exchange admin credentials for a short-lived JWT. The credentials
 // themselves never leave the server; the client only receives a signed token.
+// Rate-limited to 5 attempts/minute per IP.
 app.MapPost("/api/auth/login", (LoginDto dto) =>
 {
     if (dto.Username != adminUsername || dto.Password != adminPassword)
@@ -92,7 +151,8 @@ app.MapPost("/api/auth/login", (LoginDto dto) =>
             SecurityAlgorithms.HmacSha256),
     });
     return Results.Ok(new { token });
-});
+})
+.RequireRateLimiting("login");
 
 // Who am I? lets the admin page verify a stored token is still valid.
 app.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
@@ -119,7 +179,8 @@ app.MapPost("/api/contact", async (ContactDto dto, AppDb db) =>
     db.Contacts.Add(contact);
     await db.SaveChangesAsync();
     return Results.Created($"/api/contact/{contact.Id}", contact);
-});
+})
+.RequireRateLimiting("public-write");
 
 app.MapGet("/api/contact", async (AppDb db) =>
     await db.Contacts.OrderByDescending(c => c.CreatedAtUtc).ToListAsync())

@@ -142,6 +142,18 @@ alert at $5 to your email. Also glance at **Cost Explorer** weekly.
   `ENTRYPOINT ["dotnet", "<YourApp>.dll"]`). Wire your connection string from
   the `ConnectionStrings__DefaultConnection` env var — that's what compose sets.
 
+## Admin console, API docs & password reset
+
+- **Admin inbox**: `https://<your-cloudfront-domain>/#/admin` — sign in to read contact messages. Credentials were printed by `bootstrap.sh` (username `admin`; the password lives as the `ADMIN_PASSWORD` EB environment property — `aws elasticbeanstalk describe-configuration-settings ...` shows it if lost).
+- **API docs**: `https://<your-cloudfront-domain>/swagger` — interactive OpenAPI docs. Click **Authorize**, paste a token from `POST /api/auth/login`, and you can call protected endpoints from the browser.
+- **Rate limits**: login allows 5 attempts/minute per IP; the public contact form 20 posts/minute. Exceeding them returns `429 Too Many Requests`.
+- **Reset the admin password** (run from the repo root):
+  ```bash
+  bash deploy/reset-admin-password.sh                # generate a strong one
+  bash deploy/reset-admin-password.sh "MyNewPass123" # set your own
+  bash deploy/reset-admin-password.sh --logout-all   # also invalidate all issued tokens
+  ```
+
 ## Troubleshooting
 
 | Symptom | Fix |
