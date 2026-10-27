@@ -158,7 +158,7 @@ export const education = {
 }
 
 export const languages = [
-  { name: 'Japanese', note: 'NAT-Test N4 passed' },
+  { name: 'Japanese', note: 'Professional working proficiency' },
   { name: 'English', note: 'Professional working proficiency' },
   { name: 'Bangla', note: 'Native' },
   { name: 'Hindi', note: 'Conversational' },
